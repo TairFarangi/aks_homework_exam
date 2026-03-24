@@ -140,15 +140,11 @@ kubectl apply -f k8s/ -R
 
 
 # --- STEP 6: FINAL SYNC & VERIFICATION ---
-echo -e "${BLUE}🔄 Restarting deployments to ensure latest image pulled...${NC}"
-kubectl rollout restart deployment service-a
-kubectl rollout restart deployment service-b
-
 echo -e "${BLUE}⏳ Waiting for pods to stabilize (Readiness Checks)...${NC}"
 kubectl wait --for=condition=ready pod -l app=service-a --timeout=300s
 kubectl wait --for=condition=ready pod -l app=service-b --timeout=300s
 
-echo -e "${BLUE}⏳ Fetching External IP...${NC}"
+echo -e "${BLUE}⏳ Fetching External IP from Ingress Controller...${NC}"
 EXTERNAL_IP=""
 while [ -z "$EXTERNAL_IP" ]; do
   EXTERNAL_IP=$(kubectl get ingress -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
