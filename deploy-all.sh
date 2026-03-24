@@ -24,64 +24,73 @@ fi
 
 
 # --- STEP 1: RESOURCE GROUP DISCOVERY ---
-echo -e "${BLUE}🔍 Step 1: Discovering Resource Group...${NC}"
-# Retrieve the first available Resource Group in the subscription
-RG_NAME=$(az group list --query "[0].name" -o tsv)
+echo -e "${BLUE}🔍 Step 1: Discovering Active AKS Resource Group...${NC}"
 
+# 1. Primary Check: Find a Resource Group that already contains an active AKS cluster
+RG_NAME=$(az aks list --query "[0].resourceGroup" -o tsv)
+
+# 2. Secondary Check: If no AKS is found, look for our specific fallback RG name
 if [ -z "$RG_NAME" ]; then
-    echo -e "${YELLOW}ℹ️ No Resource Group found. Creating new: $NEW_RG...${NC}"
+    echo -e "${YELLOW}⚠️ No active AKS found. Searching for existing RG: $NEW_RG...${NC}"
+    RG_NAME=$(az group list --query "[?name=='$NEW_RG'].name" -o tsv)
+fi
+
+# 3. Final Fallback: If still not found, create a new Resource Group
+if [ -z "$RG_NAME" ]; then
+    echo -e "${YELLOW}ℹ️ No relevant Resource Group found. Creating new: $NEW_RG...${NC}"
     az group create --name $NEW_RG --location $NEW_LOCATION
     RG_NAME=$NEW_RG
 else
-    echo -e "${GREEN}✅ Found existing Resource Group: $RG_NAME${NC}"
+    echo -e "${GREEN}✅ Found existing relevant Resource Group: $RG_NAME${NC}"
 fi
 
 
 # --- STEP 2: ACR DISCOVERY ---
-echo -e "${BLUE}🔍 Step 2: Discovering Container Registry...${NC}"
-# Search for an existing ACR within the current subscription
-ACR_NAME=$(az acr list --query "[0].name" -o tsv)
+echo -e "${BLUE}🔍 Step 2: Discovering Container Registry in $RG_NAME...${NC}"
+
+# Search for an existing ACR ONLY within the identified Resource Group
+ACR_NAME=$(az acr list --resource-group $RG_NAME --query "[0].name" -o tsv)
 
 if [ -z "$ACR_NAME" ]; then
-    echo -e "${YELLOW}🏗️ No ACR found. Creating new: $NEW_ACR in $RG_NAME...${NC}"
+    echo -e "${YELLOW}🏗️ No ACR found in $RG_NAME. Creating new: $NEW_ACR...${NC}"
     az acr create --resource-group $RG_NAME --name $NEW_ACR --sku Basic
     ACR_NAME=$NEW_ACR
-    sleep 10 # Allow DNS propagation
+    sleep 10 # Allow extra time for Azure DNS to update
 else
-    echo -e "${GREEN}✅ Found existing ACR: $ACR_NAME${NC}"
+    echo -e "${GREEN}✅ Found existing ACR: $ACR_NAME (in $RG_NAME)${NC}"
 fi
 
 
 # --- STEP 3: AKS DISCOVERY ---
-echo -e "${BLUE}🔍 Step 3: Discovering AKS Cluster...${NC}"
-CLUSTER_NAME=$(az aks list --query "[0].name" -o tsv)
-# Find the first available AKS cluster and its corresponding Resource Group
-CLUSTER_RG=$(az aks list --query "[0].resourceGroup" -o tsv)
+echo -e "${BLUE}🔍 Step 3: Discovering AKS Cluster in $RG_NAME...${NC}"
+
+# Search for an existing AKS cluster specifically within the identified Resource Group
+CLUSTER_NAME=$(az aks list --resource-group $RG_NAME --query "[0].name" -o tsv)
 
 if [ -z "$CLUSTER_NAME" ]; then
-    echo -e "${YELLOW}☸️ No AKS found. Creating new: $NEW_CLUSTER (5-10 mins)...${NC}"
+    echo -e "${YELLOW}☸️ No AKS found in $RG_NAME. Creating new: $NEW_CLUSTER (5-10 mins)...${NC}"
     az aks create \
         --resource-group $RG_NAME \
         --name $NEW_CLUSTER \
         --node-count 1 \
         --node-vm-size Standard_B2s_v2 \
         --enable-managed-identity \
+        --network-plugin azure \
+        --network-policy calico \
         --generate-ssh-keys
 
     CLUSTER_NAME=$NEW_CLUSTER
-    CLUSTER_RG=$RG_NAME
 else
-    echo -e "${GREEN}✅ Found existing AKS Cluster: $CLUSTER_NAME (in $CLUSTER_RG)${NC}"
+    echo -e "${GREEN}✅ Found existing AKS Cluster: $CLUSTER_NAME (in $RG_NAME)${NC}"
 fi
 
-# Always ensure ACR is attached to AKS, even if both existed before
-echo -e "${BLUE}🔗 Attaching ACR to new AKS Cluster...${NC}"
-az aks update -n $CLUSTER_NAME -g $CLUSTER_RG --attach-acr $ACR_NAME
-
+# Ensure the ACR is attached to the AKS cluster for image pulling permissions
+echo -e "${BLUE}🔗 Ensuring ACR connectivity for AKS Cluster...${NC}"
+az aks update -n $CLUSTER_NAME -g $RG_NAME --attach-acr $ACR_NAME
 
 # --- STEP 4: PREPARATION & CONNECTIVITY to AKS cluster ---
 echo -e "${BLUE}🔑 Refreshing AKS credentials for $CLUSTER_NAME...${NC}"
-az aks get-credentials --resource-group $CLUSTER_RG --name $CLUSTER_NAME --overwrite-existing
+az aks get-credentials --resource-group $RG_NAME --name $CLUSTER_NAME --overwrite-existing
 
 # Implement a retry loop to handle potential DNS propagation delays
 echo -e "${BLUE}⏳ Testing connectivity to Kubernetes API...${NC}"
