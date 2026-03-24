@@ -1,19 +1,30 @@
 # AKS Homework Project
 > This project demonstrates the design and implementation of a production-ready environment on Azure Kubernetes Service (AKS), featuring a secure, end-to-end microservices architecture with ingress routing, network isolation, and runtime health management.
 
-## ⚡ TL;DR - Quick Start (Run This First)
-To deploy the entire project (Docker build, Push to ACR, and K8s Deployment) automatically, run:
+> ## ⚡ TL;DR - Quick Start (Run This First)
+>To deploy the entire project (Docker build, Push to ACR, and K8s Deployment) automatically, run:
+>
+>1. **Update Configuration:** Open deploy-all.sh and update the variables at the top to match your environment:
+>
+>```Bash
+># --- CONFIGURATION (Update these) ---
+>RG_NAME="your-resource-group"
+>CLUSTER_NAME="your-cluster-name"
+>ACR_NAME="your-container-registry-name"
+>```
+>
+>2. **Make the script executable:**
+>```Bash
+>chmod +x deploy-all.sh
+>```
+>
+>3. **Run the automation script:**
+>```bash
+>./deploy-all.sh
+>```
+>Requires: Azure CLI (az login), Docker, and kubectl connected to your AKS cluster.
 
-1. Make the script executable
-```Bash
-chmod +x deploy-all.sh
-```
 
-2. Run the automation script
-```bash
-./deploy-all.sh
-```
-Requires: Azure CLI (az login), Docker, and kubectl connected to your AKS cluster.
 
 ## Overview
 
