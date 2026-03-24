@@ -13,10 +13,10 @@ spec:
         app: service-b
     spec:
       containers:
-      - name: nginx
-        image: nginx
+      - name: service-b
+        image: paulbouwer/hello-kubernetes:1.10
         ports:
-        - containerPort: 80
+        - containerPort: 8080
         resources:
           limits:
             cpu: "100m"    
@@ -27,12 +27,12 @@ spec:
         livenessProbe:
           httpGet:
             path: /
-            port: 80
+            port: 8080
           initialDelaySeconds: 15
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /
-            port: 80
+            port: 8080
           initialDelaySeconds: 5
           periodSeconds: 5

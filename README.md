@@ -23,7 +23,7 @@ chmod +x deploy-all.sh  # Optional if needed
 ### 🚀 Key Capabilities
 * Smart Auto-Discovery: The script scans your subscription and attaches itself to existing resources, eliminating the need for manual configuration.
 * Service A (Node.js): A backend application fetching real-time BTC prices with internal 10-minute moving average logic.
-* Service B (Nginx): A static web server secured with zero-trust policies.
+* Service B (Hello-Kubernetes): A specialized demonstration service providing real-time pod metadata and environment details.
 * Path-Based Ingress: Unified entry point via Nginx Ingress Controller.
 * Zero-Trust Networking: Strict NetworkPolicy prevents unauthorized internal communication (e.g., Service A cannot reach Service B directly).
 * Self-Healing: Liveness and Readiness probes ensure traffic only reaches healthy pods.
@@ -33,8 +33,9 @@ chmod +x deploy-all.sh  # Optional if needed
 ### 🗺️ System Flow
 - External Access: Services are exposed via a single Public IP:
     - `http://<EXTERNAL-IP>/service-a` → Routes to Node.js App.
-    - `http://<EXTERNAL-IP>/service-b` → Routes to Nginx.
-- Internal Security: A NetworkPolicy is applied to Service B to prevent direct communication from Service A, while allowing ingress traffic from the Ingress Controller and other internal services.
+    - `http://<EXTERNAL-IP>/service-b` → Routes to Hello-Kubernetes Dashboard (include pod and node info).
+- Internal Security: A NetworkPolicy is applied to Service B to prevent direct communication from Service A, while allowing ingress traffic from the Ingress Controller (and other internal services).
+By using a namespaceSelector in the NetworkPolicy, we ensure that the only authorized path to Service B is through the formal Ingress route.
 - Infrastructure as Code: All resources are defined via YAML manifests for full repeatability.
 
 
@@ -50,7 +51,10 @@ The provided script handles the entire lifecycle without requiring any manual va
 
 
 
-
+## 🧠 Architectural Notes
+- State: The 10-minute history is stored In-Memory for this demo. In a full environment, Redis or CosmosDB would be used to persist data across pod restarts.
+- Scalability: Configured with replicas: 1 (Singleton) to ensure consistent logging and avoid API rate limits. Horizontal scaling would require a shared database (Producer/Consumer pattern).
+- Resiliency: A Readiness Probe is implemented to ensure the service reports as Not Ready until the first successful API fetch is completed after a restart.
 
 
 
@@ -64,7 +68,7 @@ Once the script completes, it will display your Public IP.
     - Service A: Open `http://<EXTERNAL-IP>/service-a`
         - Expected: HTML response ("Service A is Running!") and BTC price logs in the pod logs.
     - Service B: Open `http://<EXTERNAL-IP>/service-b`
-        - Expected: Nginx Welcome page.
+        - Expected: visual dashboard showing Pod Name and Node info.
 
 
 ### Network Isolation (Security Check)
@@ -107,17 +111,18 @@ kubectl exec -it $(kubectl get pod -l app=service-a -o jsonpath='{.items[0].meta
   ```text
 ├── k8s/
 │   ├── deployments/
-│   │   ├── service-a-deploy.yaml  # Hardened with Probes & Resources
-│   │   └── service-b-deploy.yaml
+│   │   ├── service-a-deployment.yaml 
+│   │   └── service-b-deployment.yaml
 │   ├── network/
 │   │   ├── ingress.yaml           # Nginx Path-based rules
 │   │   └── network-policy.yaml    # Isolation logic
 │   └── services/
-│       ├── service-a-svc.yaml     # Internal ClusterIP
+│       ├── service-a-svc.yaml     
 │       └── service-b-svc.yaml
 ├── app/
 │   ├── app.js                     # Node.js app Logic (with /ready & /healthz)
 │   ├── package.json
 │   └── Dockerfile
-└── deploy-all.sh                  # Automated deployment script.
+│   └── .gitignore
+└── deploy-all.sh                  # Automated deployment script
 └── README.md                      # Documentation
