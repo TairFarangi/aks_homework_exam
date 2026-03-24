@@ -13,6 +13,7 @@ NC='\033[0m'
 
 echo -e "${BLUE}🚀 Starting automated deployment...${NC}"
 
+# Check context
 if [ ! -d "./app" ] || [ ! -d "./k8s" ]; then
     echo -e "${RED}❌ Error: Please run this script from the project root directory!${NC}"
     exit 1
@@ -35,7 +36,7 @@ docker push $ACR_NAME.azurecr.io/service-a:latest
 echo -e "${BLUE}☸️ Applying Kubernetes resources...${NC}"
 kubectl apply -f k8s/ -R
 
-# 5. Force Kubernetes to pull the new image even if the tag is the same
+# 5. Restart Deployments
 echo -e "${BLUE}🔄 Restarting deployments to apply latest code changes...${NC}"
 kubectl rollout restart deployment service-a
 kubectl rollout restart deployment service-b
@@ -46,8 +47,23 @@ echo -e "${BLUE}⏳ Waiting for pods to stabilize (Readiness Probes)...${NC}"
 kubectl wait --for=condition=ready pod -l app=service-a --timeout=180s
 kubectl wait --for=condition=ready pod -l app=service-b --timeout=180s
 
-# 7. Display current status
-echo -e "${GREEN}✅ Deployment Complete! Current Cluster Status:${NC}"
-kubectl get pods,svc,ingress
+# 7. Wait for External IP
+echo -e "${BLUE}⏳ Waiting for External IP (this may take a minute)...${NC}"
 
-echo -e "${BLUE}🌐 Hint: Run 'kubectl get ingress' to find your External IP.${NC}"
+EXTERNAL_IP=""
+# Loop until the Ingress gets an IP from Azure Load Balancer
+while [ -z "$EXTERNAL_IP" ]; do
+  # Adjust 'main-ingress' to your actual Ingress name if it's different in your YAML
+  EXTERNAL_IP=$(kubectl get ingress -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+  if [ -z "$EXTERNAL_IP" ]; then
+    echo -n "."
+    sleep 5
+  fi
+done
+
+echo -e "\n${GREEN}✅ Deployment Complete!${NC}"
+echo -e "${GREEN}-------------------------------------------------------${NC}"
+echo -e "${BLUE}🚀 You can access the services here:${NC}"
+echo -e "Service A: ${GREEN}http://$EXTERNAL_IP/service-a${NC}"
+echo -e "Service B: ${GREEN}http://$EXTERNAL_IP/service-b${NC}"
+echo -e "${GREEN}-------------------------------------------------------${NC}"
