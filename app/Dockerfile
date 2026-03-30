@@ -7,6 +7,9 @@ RUN npm install --production
 
 COPY . .
 
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 8080
 
 CMD ["node", "app.js"]

@@ -12,6 +12,9 @@ spec:
       labels:
         app: service-b
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       containers:
       - name: service-b
         image: paulbouwer/hello-kubernetes:1.10
